@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Scan Sense — PC Receive</title>
+    <style>
+        body { background: #0a0a0a; color: #f0f0f0; font-family: system-ui, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+        .card { background: #141414; border: 1px solid #242424; padding: 40px; border-radius: 16px; text-align: center; max-width: 380px; width: 90%; }
+        h1 { font-size: 20px; margin: 0 0 8px; letter-spacing: 0.05em; }
+        p { color: #888; font-size: 14px; margin: 0 0 24px; }
+        .qr-wrap { background: #fff; padding: 14px; border-radius: 12px; display: inline-block; margin-bottom: 20px; }
+        .status { font-size: 13px; color: #a3a3a3; background: #1c1c1c; padding: 10px 14px; border-radius: 8px; }
+        .received { margin-top: 16px; text-align: left; font-size: 13px; color: #d4d4d4; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>SCAN SENSE</h1>
+        <p>Open Scan Sense on your phone and tap <b>Link PC</b></p>
+        <div class="qr-wrap">
+            <img id="qr" width="210" height="210" alt="QR Code" />
+        </div>
+        <div class="status" id="status">Waiting for scans...</div>
+        <div class="received" id="log"></div>
+    </div>
+
+    <script>
+        const SUPABASE_URL = "https://qlqsnmkokradybjaygby.supabase.co";
+        const ANON_KEY = "sb_publishable_JSxWE382r9dzuQc_rgf4KQ_pai6udIz";
+        const BUCKET = "scans";
+
+        const sessionId = "sess_" + Math.random().toString(36).substring(2, 12);
+        const qrPayload = `scansense://${sessionId}`;
+        document.getElementById("qr").src =
+            `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(qrPayload)}`;
+
+        const downloaded = new Set();
+
+        async function checkForFiles() {
+            try {
+                const res = await fetch(`${SUPABASE_URL}/storage/v1/object/list/${BUCKET}`, {
+                    method: "POST",
+                    headers: {
+                        "apikey": ANON_KEY,
+                        "Authorization": `Bearer ${ANON_KEY}`,
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({ prefix: sessionId })
+                });
+
+                const files = await res.json();
+                if (!Array.isArray(files)) return;
+
+                for (const file of files) {
+                    if (!file.name || downloaded.has(file.name)) continue;
+                    downloaded.add(file.name);
+
+                    const filePath = `${sessionId}/${file.name}`;
+                    const downloadUrl = `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${filePath}`;
+
+                    document.getElementById("status").textContent = `Downloading ${file.name}...`;
+
+                    const fileRes = await fetch(downloadUrl);
+                    const blob = await fileRes.blob();
+                    const a = document.createElement("a");
+                    a.href = URL.createObjectURL(blob);
+                    a.download = file.name;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+
+                    await fetch(`${SUPABASE_URL}/storage/v1/object/${BUCKET}/${filePath}`, {
+                        method: "DELETE",
+                        headers: { "apikey": ANON_KEY, "Authorization": `Bearer ${ANON_KEY}` }
+                    });
+
+                    document.getElementById("status").textContent = "Ready for next scan.";
+                    document.getElementById("log").innerHTML += `<div>✓ ${file.name}</div>`;
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        setInterval(checkForFiles, 2000);
+    </script>
+</body>
+</html>
