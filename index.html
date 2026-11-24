@@ -35,17 +35,36 @@
         document.getElementById("qr").src =
             `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(qrPayload)}`;
 
+        const headers = {
+            "apikey": ANON_KEY,
+            "Authorization": `Bearer ${ANON_KEY}`
+        };
+
+        // Create .online marker so the phone knows this PC tab is active
+        fetch(`${SUPABASE_URL}/storage/v1/object/${BUCKET}/${sessionId}/.online`, {
+            method: "POST",
+            headers: { ...headers, "Content-Type": "text/plain", "x-upsert": "true" },
+            body: "1"
+        });
+
+        // Delete .online marker when tab is closed or refreshed
+        function markOffline() {
+            fetch(`${SUPABASE_URL}/storage/v1/object/${BUCKET}/${sessionId}/.online`, {
+                method: "DELETE",
+                headers,
+                keepalive: true
+            });
+        }
+        window.addEventListener("pagehide", markOffline);
+        window.addEventListener("beforeunload", markOffline);
+
         const downloaded = new Set();
 
         async function checkForFiles() {
             try {
                 const res = await fetch(`${SUPABASE_URL}/storage/v1/object/list/${BUCKET}`, {
                     method: "POST",
-                    headers: {
-                        "apikey": ANON_KEY,
-                        "Authorization": `Bearer ${ANON_KEY}`,
-                        "Content-Type": "application/json"
-                    },
+                    headers: { ...headers, "Content-Type": "application/json" },
                     body: JSON.stringify({ prefix: sessionId })
                 });
 
@@ -53,7 +72,7 @@
                 if (!Array.isArray(files)) return;
 
                 for (const file of files) {
-                    if (!file.name || downloaded.has(file.name)) continue;
+                    if (!file.name || file.name === ".online" || downloaded.has(file.name)) continue;
                     downloaded.add(file.name);
 
                     const filePath = `${sessionId}/${file.name}`;
@@ -72,7 +91,7 @@
 
                     await fetch(`${SUPABASE_URL}/storage/v1/object/${BUCKET}/${filePath}`, {
                         method: "DELETE",
-                        headers: { "apikey": ANON_KEY, "Authorization": `Bearer ${ANON_KEY}` }
+                        headers
                     });
 
                     document.getElementById("status").textContent = "Ready for next scan.";
