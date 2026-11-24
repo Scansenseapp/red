@@ -40,16 +40,16 @@
             "Authorization": `Bearer ${ANON_KEY}`
         };
 
-        // Create .online marker so the phone knows this PC tab is active
-        fetch(`${SUPABASE_URL}/storage/v1/object/${BUCKET}/${sessionId}/.online`, {
+        // Create online.txt marker while tab is open
+        fetch(`${SUPABASE_URL}/storage/v1/object/${BUCKET}/${sessionId}/online.txt`, {
             method: "POST",
             headers: { ...headers, "Content-Type": "text/plain", "x-upsert": "true" },
-            body: "1"
+            body: "online"
         });
 
-        // Delete .online marker when tab is closed or refreshed
+        // Delete online.txt when tab is closed or refreshed
         function markOffline() {
-            fetch(`${SUPABASE_URL}/storage/v1/object/${BUCKET}/${sessionId}/.online`, {
+            fetch(`${SUPABASE_URL}/storage/v1/object/${BUCKET}/${sessionId}/online.txt`, {
                 method: "DELETE",
                 headers,
                 keepalive: true
@@ -72,7 +72,7 @@
                 if (!Array.isArray(files)) return;
 
                 for (const file of files) {
-                    if (!file.name || file.name === ".online" || downloaded.has(file.name)) continue;
+                    if (!file.name || file.name === "online.txt" || downloaded.has(file.name)) continue;
                     downloaded.add(file.name);
 
                     const filePath = `${sessionId}/${file.name}`;
